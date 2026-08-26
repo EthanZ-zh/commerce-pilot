@@ -122,7 +122,6 @@ export function AgentFlow({ trace }: AgentFlowProps) {
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
-        proOptions={{ hideAttribution: true }}
       >
         <Background color="#2d3753" gap={22} size={1} />
         <MiniMap pannable zoomable nodeColor="#6374ff" maskColor="rgba(7, 12, 23, .75)" />

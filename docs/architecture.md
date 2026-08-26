@@ -132,3 +132,5 @@ FastAPI 自动埋点生成 HTTP SERVER/ASGI spans，业务层手工生成 `comme
 GitHub Actions 使用 Python 3.11 和 pgvector PostgreSQL service，依次执行 Ruff、mypy、85% 覆盖率门禁、`pip check`、Alembic 全量升级和 `alembic check`。CI 环境强制 deterministic Provider，不配置 DashScope Key，因此 Pull Request 不产生外部模型调用。
 
 同一 `quality/test` Job 使用 Node 24 执行 `npm ci`、Vitest、TypeScript 检查和 Vite 生产构建。React 工作流图和指标只消费后端真实返回；首版不伪造节点实时进度，后续如需逐节点更新，应由 LangGraph stream 通过 SSE 输出事件。
+
+Playwright 使用独立端口和隔离数据库执行真实 Chromium 测试。测试启动 development-only FastAPI 会话，但强制使用 deterministic LLM/RAG Provider，依次覆盖多 Agent 执行、混合检索证据、人工审批中断恢复与 DRAFT 活动写入。CI 失败时保存截图、视频、Trace 和 HTML 报告，既不调用付费模型，也不污染开发数据库。

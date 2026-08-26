@@ -155,6 +155,7 @@ export function ScenarioPanel({
 
       <Space orientation="vertical" size={10} className="action-stack">
         <Button
+          data-testid="run-agent"
           type="primary"
           size="large"
           block
@@ -167,6 +168,7 @@ export function ScenarioPanel({
         </Button>
         <div className="secondary-actions">
           <Button
+            data-testid="run-baseline"
             icon={<Icon name="compare" size={16} />}
             loading={baselineLoading}
             disabled={!authReady}
@@ -175,6 +177,7 @@ export function ScenarioPanel({
             运行确定性基线
           </Button>
           <Button
+            data-testid="submit-approval"
             icon={<Icon name="send" size={16} />}
             loading={approvalLoading}
             disabled={!authReady}

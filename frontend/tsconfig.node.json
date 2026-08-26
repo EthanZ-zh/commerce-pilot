@@ -4,8 +4,9 @@
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "types": ["node"],
     "noEmit": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["vite.config.ts"]
+  "include": ["vite.config.ts", "playwright.config.ts", "e2e/**/*.ts"]
 }
