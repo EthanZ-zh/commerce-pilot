@@ -13,3 +13,7 @@ htmlcov/
 .vscode/
 dist/
 build/
+node_modules/
+*.tsbuildinfo
+.demo/
+.demo-*.png

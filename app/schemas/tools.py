@@ -152,6 +152,18 @@ class ModelCallTrace(StrictModel):
     error: str | None = None
 
 
+class DemoSessionRequest(StrictModel):
+    role: Literal["analyst", "approver"]
+
+
+class DemoSessionResult(StrictModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    subject: str
+    roles: list[Literal["analyst", "approver"]]
+    expires_in: int
+
+
 class BaselineWorkflowRequest(StrictModel):
     category: str = Field(default="耳机", min_length=1, max_length=80)
     region: str = Field(default="华南", min_length=1, max_length=40)

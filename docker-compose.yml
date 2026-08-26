@@ -28,6 +28,44 @@ services:
       timeout: 3s
       retries: 10
 
+  api:
+    profiles: ["demo"]
+    build: .
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://commerce:commerce@postgres:5432/commerce_pilot
+      REDIS_URL: redis://redis:6379/0
+      APP_ENV: development
+    command:
+      - /bin/sh
+      - -c
+      - python -m alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  frontend:
+    profiles: ["demo"]
+    build:
+      context: ./frontend
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
 volumes:
   commerce_postgres_data:
   commerce_redis_data:

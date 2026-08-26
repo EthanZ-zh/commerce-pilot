@@ -38,6 +38,8 @@ CommercePilot 是一个面向电商运营的多 Agent 协作平台。仓库已�
 - Alembic 业务模型、审批与 pgvector 三阶段迁移；
 - PostgreSQL + Redis Docker Compose；
 - GitHub Actions 覆盖率门禁、静态检查、依赖检查与真实 PostgreSQL 迁移检查；
+- React + TypeScript Agent 运营控制台：工作流图、RAG 证据、模型指标、基线对比与人工审批；
+- Docker Compose `demo` profile 一键启动 API、前端、PostgreSQL 和 Redis；
 - pytest 单元与集成测试。
 
 ## 技术栈
@@ -48,9 +50,44 @@ CommercePilot 是一个面向电商运营的多 Agent 协作平台。仓库已�
 - PostgreSQL / Redis
 - pytest / Ruff / mypy
 - Docker Compose
+- React / TypeScript / Vite / Ant Design / React Flow
 - 下一阶段：OIDC/JWKS、遥测看板与人工标注对抗评测
 
 ## 快速开始
+
+### 0. 一键打开面试演示台
+
+确保 Docker Desktop 已启动，然后执行：
+
+```powershell
+docker compose --profile demo up -d --build
+```
+
+打开：
+
+- React 演示台：http://127.0.0.1:5173
+- Swagger：http://127.0.0.1:8000/docs
+
+演示台会在后端 `development` 环境中自动创建 analyst/approver 临时会话，JWT 和 `thread_id` 只在页面内部流转。生产环境不会开放演示会话接口。停止服务但保留数据库卷：
+
+```powershell
+docker compose --profile demo stop
+```
+
+若默认端口被占用，可以临时修改映射：
+
+```powershell
+$env:API_PORT = "8001"
+$env:FRONTEND_PORT = "5174"
+docker compose --profile demo up -d --build
+```
+
+前端本地开发：
+
+```powershell
+npm ci --prefix frontend
+npm run dev --prefix frontend
+```
 
 ### 1. 创建环境
 

@@ -3,8 +3,10 @@
 ## 1. 分层
 
 ```text
-FastAPI
-  -> Baseline workflow（确定性编排）
+React Agent Console
+  -> Vite dev proxy / Nginx same-origin proxy
+      -> FastAPI
+          -> Baseline workflow（确定性编排）
       -> sales tool
       -> inventory tool
       -> pricing tool
@@ -14,6 +16,8 @@ FastAPI
           -> SQLAlchemy repositories/models
               -> PostgreSQL（生产）/ SQLite（测试）
 ```
+
+React 层只调用 FastAPI，不读取数据库、不持有 DashScope Key，也不绕过 JWT/RBAC。开发环境通过 `/api/v1/auth/demo-session` 获取短期 analyst/approver 会话，消除面试演示中的手工 Token 和 `thread_id` 操作；该接口在非 `development` 环境返回 404。生产构建由 Nginx 提供静态文件，并将 `/api` 同源代理到 FastAPI。
 
 第一阶段刻意不使用 LLM。第二阶段已将编排升级为 LangGraph Supervisor-Worker 图，并继续复用相同工具契约。
 
@@ -126,3 +130,5 @@ FastAPI 自动埋点生成 HTTP SERVER/ASGI spans，业务层手工生成 `comme
 遥测默认关闭，可选择 OTLP HTTP Batch exporter 或本地 Console exporter。`/api/v1/health` 被排除，避免健康探针制造大量无价值 Trace；启用遥测却未配置 exporter 时 Settings 校验直接失败。
 
 GitHub Actions 使用 Python 3.11 和 pgvector PostgreSQL service，依次执行 Ruff、mypy、85% 覆盖率门禁、`pip check`、Alembic 全量升级和 `alembic check`。CI 环境强制 deterministic Provider，不配置 DashScope Key，因此 Pull Request 不产生外部模型调用。
+
+同一 `quality/test` Job 使用 Node 24 执行 `npm ci`、Vitest、TypeScript 检查和 Vite 生产构建。React 工作流图和指标只消费后端真实返回；首版不伪造节点实时进度，后续如需逐节点更新，应由 LangGraph stream 通过 SSE 输出事件。

@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from app.config import DEVELOPMENT_JWT_SECRET, Settings
+from app.config import DEVELOPMENT_JWT_SECRET, Settings, get_settings
 from app.infrastructure.database import get_db
 from app.main import app
 from app.security import create_access_token, decode_access_token
@@ -45,6 +45,44 @@ def test_production_rejects_development_or_short_jwt_secret() -> None:
         Settings(app_env="production", jwt_secret_key=DEVELOPMENT_JWT_SECRET)
     with pytest.raises(ValidationError, match="至少 32 字节"):
         Settings(app_env="production", jwt_secret_key="too-short")
+
+
+def test_demo_session_is_development_only() -> None:
+    development = Settings(
+        app_env="development",
+        jwt_secret_key="development-test-secret-at-least-thirty-two-bytes",
+    )
+    app.dependency_overrides[get_settings] = lambda: development
+    try:
+        with TestClient(app) as client:
+            response = client.post("/api/v1/auth/demo-session", json={"role": "analyst"})
+            assert response.status_code == 200
+            body = response.json()
+            assert body["subject"] == "demo-analyst"
+            assert body["roles"] == ["analyst"]
+            assert body["token_type"] == "bearer"
+            assert decode_access_token(body["access_token"], development).roles == {
+                "analyst"
+            }
+
+            invalid = client.post("/api/v1/auth/demo-session", json={"role": "admin"})
+            assert invalid.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+    production = Settings(
+        app_env="production",
+        jwt_secret_key="production-secret-key-at-least-thirty-two-bytes",
+    )
+    app.dependency_overrides[get_settings] = lambda: production
+    try:
+        with TestClient(app) as client:
+            unavailable = client.post(
+                "/api/v1/auth/demo-session", json={"role": "approver"}
+            )
+            assert unavailable.status_code == 404
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_workflow_api_enforces_authentication_and_roles(

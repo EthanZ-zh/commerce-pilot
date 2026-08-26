@@ -21,6 +21,7 @@ CommercePilot 面向电商运营人员，将“发现库存积压商品—分析
 5. 检查禁用词、毛利和折扣约束；
 6. 只创建 `DRAFT` 活动，不能绕过人工审批直接上线；
 7. 记录节点耗时、输入摘要、输出摘要和错误。
+8. 在 React 单页控制台展示 Agent 图、RAG 证据、模型指标和审批闭环，不要求演示者手工复制 JWT 或 `thread_id`。
 
 ## 3. 输入
 
@@ -144,3 +145,14 @@ CommercePilot 面向电商运营人员，将“发现库存积压商品—分析
 - 遥测默认关闭，启用时必须配置 OTLP 或 Console exporter，健康检查不产生 Trace；
 - CI 强制离线 Provider，执行覆盖率门禁、Ruff、mypy、依赖和 pgvector PostgreSQL 迁移检查；
 - Pull Request 在任一质量门禁失败时不得视为可交付。
+
+## 15. React 演示控制台验收标准
+
+- React 只通过 FastAPI 访问业务能力，不直连 PostgreSQL 或读取模型密钥；
+- 页面提供预设业务场景、参数约束、确定性基线与多 Agent 执行入口；
+- 展示 Supervisor-Worker 图、策略、定价结果、RAG 来源与分数、合规结论、Token、延迟、retry 和 fallback；
+- 人工审批页面隐藏 JWT 和 `thread_id` 的技术操作，同时仍通过 analyst/approver API 权限边界执行；
+- 演示会话接口只能在 development 环境使用，生产环境必须不可用；
+- Docker Compose demo profile 可以启动 API、前端、PostgreSQL 与 Redis；
+- 前端 Vitest、TypeScript 检查和 Vite 生产构建纳入 GitHub Actions；
+- 未接入 SSE 前不展示伪造的实时节点进度，只展示后端真实返回的轨迹。
