@@ -5,6 +5,7 @@ from langgraph.checkpoint.postgres import PostgresSaver
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.config import Settings, get_settings
 from app.domain.models import Policy, PolicyChunk, Product, SalesDaily
 from app.infrastructure.checkpoint import get_checkpoint_saver
 from app.infrastructure.database import get_db
@@ -15,10 +16,12 @@ from app.schemas.tools import (
     ApprovalWorkflowStartResult,
     BaselineWorkflowRequest,
     BaselineWorkflowResult,
+    DemoSessionRequest,
+    DemoSessionResult,
     MultiAgentWorkflowResult,
     WorkflowTaskView,
 )
-from app.security import Principal, require_roles
+from app.security import Principal, create_access_token, require_roles
 from app.workflows.approval import (
     WorkflowNotFoundError,
     WorkflowStateConflictError,
@@ -38,6 +41,21 @@ ApprovalReader = Annotated[
     Principal, Depends(require_roles("approver", "viewer"))
 ]
 ApproverPrincipal = Annotated[Principal, Depends(require_roles("approver"))]
+AppSettings = Annotated[Settings, Depends(get_settings)]
+
+
+@router.post("/auth/demo-session", response_model=DemoSessionResult)
+def create_demo_session(request: DemoSessionRequest, settings: AppSettings) -> DemoSessionResult:
+    if settings.app_env != "development":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="演示会话不可用")
+    subject = "demo-analyst" if request.role == "analyst" else "demo-approver"
+    token = create_access_token(subject, {request.role}, settings)
+    return DemoSessionResult(
+        access_token=token,
+        subject=subject,
+        roles=[request.role],
+        expires_in=settings.jwt_access_token_minutes * 60,
+    )
 
 
 @router.get("/health")
