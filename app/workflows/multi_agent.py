@@ -4,7 +4,7 @@ import hashlib
 import json
 import operator
 import time
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
@@ -12,7 +12,7 @@ from typing import Annotated, Any, TypedDict, cast
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
-from opentelemetry.trace import Span, Status, StatusCode
+from opentelemetry.trace import Span, Status, StatusCode, use_span
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -601,7 +601,7 @@ def _stream_multi_agent_workflow(
     rag_provider: RagProvider | None = None,
     write_enabled: bool = True,
     persist_audit: bool = True,
-) -> Iterator[WorkflowProgressEvent]:
+) -> Generator[WorkflowProgressEvent, None, None]:
     _, task_id = _workflow_identity(request, write_enabled)
     sequence = 0
     yield WorkflowProgressEvent(
@@ -715,23 +715,39 @@ def stream_multi_agent_workflow(
     write_enabled: bool = True,
     persist_audit: bool = True,
 ) -> Iterator[WorkflowProgressEvent]:
-    with get_tracer().start_as_current_span(
+    span = get_tracer().start_span(
         "commerce_pilot.workflow.multi_agent",
         attributes=_workflow_span_attributes(request, write_enabled),
-    ) as span:
-        for event in _stream_multi_agent_workflow(
-            db,
-            request,
-            agent_provider=agent_provider,
-            rag_provider=rag_provider,
-            write_enabled=write_enabled,
-            persist_audit=persist_audit,
-        ):
+    )
+    events = _stream_multi_agent_workflow(
+        db,
+        request,
+        agent_provider=agent_provider,
+        rag_provider=rag_provider,
+        write_enabled=write_enabled,
+        persist_audit=persist_audit,
+    )
+    try:
+        while True:
+            try:
+                # Starlette may call each next() on a different worker thread. Bind and
+                # detach the span within one generator step, before yielding to ASGI.
+                with use_span(span, end_on_exit=False):
+                    event = next(events)
+            except StopIteration:
+                break
             if event.event == "workflow_completed" and event.result is not None:
                 _annotate_workflow_span(span, event.result)
             elif event.event == "workflow_failed":
                 span.set_status(Status(StatusCode.ERROR, event.detail or "workflow_failed"))
             yield event
+    except Exception as exc:
+        span.record_exception(exc)
+        span.set_status(Status(StatusCode.ERROR, type(exc).__name__))
+        raise
+    finally:
+        events.close()
+        span.end()
 
 
 def run_multi_agent_workflow(
