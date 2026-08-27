@@ -17,7 +17,7 @@ from app.config import Settings
 from app.llm.providers import DashScopeAgentModelProvider
 from app.rag.providers import DeterministicRagProvider
 from app.schemas.tools import BaselineWorkflowRequest
-from app.workflows.multi_agent import run_multi_agent_workflow
+from app.workflows.multi_agent import run_multi_agent_workflow, stream_multi_agent_workflow
 
 
 class FakeResponse:
@@ -76,12 +76,32 @@ def test_workflow_rag_and_llm_emit_diagnostic_spans(
         write_enabled=False,
         persist_audit=False,
     )
+    stream_events = list(
+        stream_multi_agent_workflow(
+            seeded_db,
+            BaselineWorkflowRequest(
+                turnover_days_threshold=1,
+                max_products=2,
+                max_discount_rate=Decimal("0.20"),
+                min_margin_rate=Decimal("0.15"),
+            ),
+            rag_provider=DeterministicRagProvider(),
+            write_enabled=False,
+            persist_audit=False,
+        )
+    )
+    stream_result = stream_events[-1].result
+    assert stream_result is not None
     monkeypatch.setattr(httpx, "post", lambda *args, **kwargs: FakeResponse())
     DashScopeAgentModelProvider(
         Settings(dashscope_api_key="test-key")
     ).supervise(BaselineWorkflowRequest())
 
-    spans = {span.name: span for span in exporter.get_finished_spans()}
+    finished_spans = exporter.get_finished_spans()
+    spans = {span.name: span for span in finished_spans}
+    workflow_spans = [
+        span for span in finished_spans if span.name == "commerce_pilot.workflow.multi_agent"
+    ]
     workflow_span = spans["commerce_pilot.workflow.multi_agent"]
     rag_span = spans["commerce_pilot.rag.retrieve"]
     llm_span = spans["commerce_pilot.llm.generate"]
@@ -91,6 +111,12 @@ def test_workflow_rag_and_llm_emit_diagnostic_spans(
 
     assert workflow_attributes["commerce_pilot.task_id"] == result.task_id
     assert workflow_attributes["commerce_pilot.workflow.status"] == "EVALUATED"
+    assert len(workflow_spans) == 2
+    assert all(
+        (span.attributes or {}).get("commerce_pilot.workflow.status") == "EVALUATED"
+        for span in workflow_spans
+    )
+    assert stream_result.task_id == result.task_id
     assert cast(int, rag_attributes["commerce_pilot.rag.result_count"]) >= 1
     assert llm_attributes["gen_ai.request.model"] == "qwen3.7-flash"
     assert llm_attributes["gen_ai.usage.input_tokens"] == 42

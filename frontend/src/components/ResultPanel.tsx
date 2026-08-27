@@ -11,13 +11,20 @@ import {
 } from "recharts";
 
 import { formatDuration, formatPercent, summarizeRun } from "../lib";
-import type { ModelCallTrace, PolicyEvidence, PricingResult, WorkflowResult } from "../types";
+import type {
+  ModelCallTrace,
+  PolicyEvidence,
+  PricingResult,
+  WorkflowProgressEvent,
+  WorkflowResult,
+} from "../types";
 import { AgentFlow } from "./AgentFlow";
 import { Icon } from "./Icon";
 
 interface ResultPanelProps {
   result?: WorkflowResult;
   label: string;
+  progress?: WorkflowProgressEvent[];
 }
 
 const pricingColumns: ColumnsType<PricingResult> = [
@@ -90,8 +97,27 @@ function PolicyCard({ policy }: { policy: PolicyEvidence }) {
   );
 }
 
-export function ResultPanel({ result, label }: ResultPanelProps) {
+export function ResultPanel({ result, label, progress = [] }: ResultPanelProps) {
   if (!result) {
+    if (progress.length) {
+      const completed = progress.filter((event) => event.event === "node_completed").length;
+      const failed = progress.some((event) => event.status === "FAILED");
+      return (
+        <div className="result-stack" data-testid="live-agent-progress">
+          <Card className="result-header live-progress-header" variant="borderless">
+            <div>
+              <Typography.Text className="eyebrow">LIVE RUN · SSE</Typography.Text>
+              <Typography.Title level={3}>{progress[0].task_id}</Typography.Title>
+              <Typography.Text type="secondary">已完成 {completed} / 7 个 Agent 节点</Typography.Text>
+            </div>
+            <Tag color={failed ? "error" : "processing"}>{failed ? "执行失败" : "实时执行中"}</Tag>
+          </Card>
+          <div className="result-tabs live-progress-flow">
+            <AgentFlow trace={[]} progress={progress} />
+          </div>
+        </div>
+      );
+    }
     return (
       <Card className="empty-result" variant="borderless">
         <Empty description="运行一个场景后，这里会展示真实 Agent 轨迹与证据" />
@@ -137,7 +163,7 @@ export function ResultPanel({ result, label }: ResultPanelProps) {
             label: "Agent 编排",
             children: (
               <>
-                <AgentFlow trace={result.trace} />
+                <AgentFlow trace={result.trace} progress={progress} />
                 {result.supervisor_plan?.length ? (
                   <div className="plan-list">
                     {result.supervisor_plan.map((step, index) => (

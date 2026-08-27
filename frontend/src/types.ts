@@ -96,6 +96,25 @@ export interface WorkflowResult {
   model_calls?: ModelCallTrace[];
 }
 
+export type WorkflowProgressEventType =
+  | "workflow_started"
+  | "node_started"
+  | "node_completed"
+  | "node_failed"
+  | "workflow_completed"
+  | "workflow_failed";
+
+export interface WorkflowProgressEvent {
+  event: WorkflowProgressEventType;
+  task_id: string;
+  sequence: number;
+  node: string | null;
+  status: "RUNNING" | "COMPLETED" | "FAILED";
+  latency_ms: number | null;
+  detail: string | null;
+  result: WorkflowResult | null;
+}
+
 export interface ApprovalStartResult {
   thread_id: string;
   task_id: string;

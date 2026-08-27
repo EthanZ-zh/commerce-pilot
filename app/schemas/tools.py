@@ -206,6 +206,24 @@ class MultiAgentWorkflowResult(BaselineWorkflowResult):
     model_calls: list[ModelCallTrace]
 
 
+class WorkflowProgressEvent(StrictModel):
+    event: Literal[
+        "workflow_started",
+        "node_started",
+        "node_completed",
+        "node_failed",
+        "workflow_completed",
+        "workflow_failed",
+    ]
+    task_id: str
+    sequence: int = Field(ge=0)
+    node: str | None = None
+    status: Literal["RUNNING", "COMPLETED", "FAILED"]
+    latency_ms: int | None = Field(default=None, ge=0)
+    detail: str | None = None
+    result: MultiAgentWorkflowResult | None = None
+
+
 class ApprovalDecisionRequest(StrictModel):
     operator: str = Field(min_length=1, max_length=100)
     decision: Literal["APPROVED", "REJECTED"]

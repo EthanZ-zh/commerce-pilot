@@ -157,4 +157,5 @@ CommercePilot 面向电商运营人员，将“发现库存积压商品—分析
 - 前端 Vitest、TypeScript 检查和 Vite 生产构建纳入 GitHub Actions；
 - Playwright 在真实 Chromium 中完成“运行 Agent、查看 RAG 证据、提交审批、批准并生成 DRAFT”的端到端验证；
 - E2E 使用独立数据库与端口，测试数据和活动草稿不得污染开发环境；
-- 未接入 SSE 前不展示伪造的实时节点进度，只展示后端真实返回的轨迹。
+- SSE 进度必须来自 LangGraph 真实 `tasks/values` 事件；页面展示节点等待、运行、完成和失败状态，并在流结束时使用后端最终结构化结果；
+- SSE 接口必须保持 analyst JWT/RBAC 边界，Token 不得放入 URL，原同步接口保持向后兼容。

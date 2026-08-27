@@ -4,6 +4,7 @@ import hashlib
 import json
 import operator
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
@@ -11,7 +12,7 @@ from typing import Annotated, Any, TypedDict, cast
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
-from opentelemetry.trace import Status, StatusCode
+from opentelemetry.trace import Span, Status, StatusCode
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -39,6 +40,7 @@ from app.schemas.tools import (
     SalesMetric,
     SalesQuery,
     TraceEvent,
+    WorkflowProgressEvent,
 )
 from app.telemetry import get_tracer
 from app.tools.campaigns import create_campaign_draft
@@ -430,15 +432,7 @@ def build_multi_agent_graph():
 MULTI_AGENT_GRAPH = build_multi_agent_graph()
 
 
-def _run_multi_agent_workflow(
-    db: Session,
-    request: BaselineWorkflowRequest,
-    *,
-    agent_provider: AgentModelProvider | None = None,
-    rag_provider: RagProvider | None = None,
-    write_enabled: bool = True,
-    persist_audit: bool = True,
-) -> MultiAgentWorkflowResult:
+def _workflow_identity(request: BaselineWorkflowRequest, write_enabled: bool) -> tuple[str, str]:
     fingerprint_input = {
         "workflow": WORKFLOW_VERSION,
         **request.model_dump(mode="json"),
@@ -446,25 +440,33 @@ def _run_multi_agent_workflow(
     if not write_enabled:
         fingerprint_input["evaluation"] = True
     fingerprint = _digest(fingerprint_input)
-    task_id = f"agent-{fingerprint[:16]}"
+    return fingerprint, f"agent-{fingerprint[:16]}"
+
+
+def _workflow_context(
+    db: Session,
+    *,
+    agent_provider: AgentModelProvider | None,
+    rag_provider: RagProvider | None,
+    write_enabled: bool,
+) -> WorkflowContext:
     factory = sessionmaker(bind=db.get_bind(), autoflush=False, expire_on_commit=False)
-    state = cast(
-        MultiAgentState,
-        MULTI_AGENT_GRAPH.invoke(
-            {
-                "request": request,
-                "task_id": task_id,
-                "audit_events": [],
-                "model_calls": [],
-            },
-            context=WorkflowContext(
-                session_factory=factory,
-                agent_provider=agent_provider or get_agent_model_provider(),
-                rag_provider=rag_provider,
-                write_enabled=write_enabled,
-            ),
-        ),
+    return WorkflowContext(
+        session_factory=factory,
+        agent_provider=agent_provider or get_agent_model_provider(),
+        rag_provider=rag_provider,
+        write_enabled=write_enabled,
     )
+
+
+def _finalize_multi_agent_result(
+    db: Session,
+    state: MultiAgentState,
+    task_id: str,
+    *,
+    write_enabled: bool,
+    persist_audit: bool,
+) -> MultiAgentWorkflowResult:
     order = {node: index for index, node in enumerate(NODE_ORDER)}
     audits = sorted(state["audit_events"], key=lambda item: order[item["node"]])
     if persist_audit:
@@ -519,6 +521,219 @@ def _run_multi_agent_workflow(
     )
 
 
+def _run_multi_agent_workflow(
+    db: Session,
+    request: BaselineWorkflowRequest,
+    *,
+    agent_provider: AgentModelProvider | None = None,
+    rag_provider: RagProvider | None = None,
+    write_enabled: bool = True,
+    persist_audit: bool = True,
+) -> MultiAgentWorkflowResult:
+    _, task_id = _workflow_identity(request, write_enabled)
+    state = cast(
+        MultiAgentState,
+        MULTI_AGENT_GRAPH.invoke(
+            {
+                "request": request,
+                "task_id": task_id,
+                "audit_events": [],
+                "model_calls": [],
+            },
+            context=_workflow_context(
+                db,
+                agent_provider=agent_provider,
+                rag_provider=rag_provider,
+                write_enabled=write_enabled,
+            ),
+        ),
+    )
+    return _finalize_multi_agent_result(
+        db,
+        state,
+        task_id,
+        write_enabled=write_enabled,
+        persist_audit=persist_audit,
+    )
+
+
+def _workflow_span_attributes(
+    request: BaselineWorkflowRequest, write_enabled: bool
+) -> dict[str, str | int | bool]:
+    return {
+        "commerce_pilot.workflow.version": WORKFLOW_VERSION,
+        "commerce_pilot.workflow.category": request.category,
+        "commerce_pilot.workflow.region": request.region,
+        "commerce_pilot.workflow.max_products": request.max_products,
+        "commerce_pilot.workflow.write_enabled": write_enabled,
+    }
+
+
+def _annotate_workflow_span(span: Span, result: MultiAgentWorkflowResult) -> None:
+    span.set_attribute("commerce_pilot.task_id", result.task_id)
+    span.set_attribute("commerce_pilot.workflow.status", result.status)
+    span.set_attribute(
+        "commerce_pilot.workflow.selected_products", len(result.selected_products)
+    )
+    span.set_attribute(
+        "commerce_pilot.workflow.input_tokens",
+        sum(call.input_tokens for call in result.model_calls),
+    )
+    span.set_attribute(
+        "commerce_pilot.workflow.output_tokens",
+        sum(call.output_tokens for call in result.model_calls),
+    )
+    span.set_attribute(
+        "commerce_pilot.workflow.fallback_count",
+        sum(call.fallback_used for call in result.model_calls),
+    )
+    span.set_attribute(
+        "commerce_pilot.workflow.retry_count",
+        sum(call.attempts - 1 for call in result.model_calls),
+    )
+
+
+def _stream_multi_agent_workflow(
+    db: Session,
+    request: BaselineWorkflowRequest,
+    *,
+    agent_provider: AgentModelProvider | None = None,
+    rag_provider: RagProvider | None = None,
+    write_enabled: bool = True,
+    persist_audit: bool = True,
+) -> Iterator[WorkflowProgressEvent]:
+    _, task_id = _workflow_identity(request, write_enabled)
+    sequence = 0
+    yield WorkflowProgressEvent(
+        event="workflow_started",
+        task_id=task_id,
+        sequence=sequence,
+        status="RUNNING",
+        detail="LangGraph workflow accepted",
+    )
+    final_state: MultiAgentState | None = None
+    try:
+        stream = MULTI_AGENT_GRAPH.stream(
+            {
+                "request": request,
+                "task_id": task_id,
+                "audit_events": [],
+                "model_calls": [],
+            },
+            context=_workflow_context(
+                db,
+                agent_provider=agent_provider,
+                rag_provider=rag_provider,
+                write_enabled=write_enabled,
+            ),
+            stream_mode=["tasks", "values"],
+            version="v2",
+        )
+        for raw_part in stream:
+            part = cast(dict[str, Any], raw_part)
+            if part.get("type") == "values":
+                final_state = cast(MultiAgentState, part["data"])
+                continue
+            if part.get("type") != "tasks":
+                continue
+            task = cast(dict[str, Any], part["data"])
+            node = str(task.get("name", ""))
+            if node not in NODE_ORDER:
+                continue
+            sequence += 1
+            if "result" not in task:
+                yield WorkflowProgressEvent(
+                    event="node_started",
+                    task_id=task_id,
+                    sequence=sequence,
+                    node=node,
+                    status="RUNNING",
+                )
+                continue
+            error = task.get("error")
+            if error:
+                yield WorkflowProgressEvent(
+                    event="node_failed",
+                    task_id=task_id,
+                    sequence=sequence,
+                    node=node,
+                    status="FAILED",
+                    detail=f"节点执行失败（{type(error).__name__}）",
+                )
+                raise RuntimeError(f"{node} failed: {type(error).__name__}")
+            node_result = task.get("result")
+            audit = None
+            if isinstance(node_result, dict):
+                audits = node_result.get("audit_events", [])
+                audit = next(
+                    (item for item in audits if item.get("node") == node),
+                    None,
+                )
+            yield WorkflowProgressEvent(
+                event="node_completed",
+                task_id=task_id,
+                sequence=sequence,
+                node=node,
+                status="COMPLETED",
+                latency_ms=audit.get("latency_ms") if audit else None,
+                detail=audit.get("detail") if audit else None,
+            )
+        if final_state is None:
+            raise RuntimeError("LangGraph stream completed without a final state")
+        result = _finalize_multi_agent_result(
+            db,
+            final_state,
+            task_id,
+            write_enabled=write_enabled,
+            persist_audit=persist_audit,
+        )
+        sequence += 1
+        yield WorkflowProgressEvent(
+            event="workflow_completed",
+            task_id=task_id,
+            sequence=sequence,
+            status="COMPLETED",
+            result=result,
+        )
+    except Exception as exc:
+        sequence += 1
+        yield WorkflowProgressEvent(
+            event="workflow_failed",
+            task_id=task_id,
+            sequence=sequence,
+            status="FAILED",
+            detail=f"工作流执行失败（{type(exc).__name__}）",
+        )
+
+
+def stream_multi_agent_workflow(
+    db: Session,
+    request: BaselineWorkflowRequest,
+    *,
+    agent_provider: AgentModelProvider | None = None,
+    rag_provider: RagProvider | None = None,
+    write_enabled: bool = True,
+    persist_audit: bool = True,
+) -> Iterator[WorkflowProgressEvent]:
+    with get_tracer().start_as_current_span(
+        "commerce_pilot.workflow.multi_agent",
+        attributes=_workflow_span_attributes(request, write_enabled),
+    ) as span:
+        for event in _stream_multi_agent_workflow(
+            db,
+            request,
+            agent_provider=agent_provider,
+            rag_provider=rag_provider,
+            write_enabled=write_enabled,
+            persist_audit=persist_audit,
+        ):
+            if event.event == "workflow_completed" and event.result is not None:
+                _annotate_workflow_span(span, event.result)
+            elif event.event == "workflow_failed":
+                span.set_status(Status(StatusCode.ERROR, event.detail or "workflow_failed"))
+            yield event
+
+
 def run_multi_agent_workflow(
     db: Session,
     request: BaselineWorkflowRequest,
@@ -530,13 +745,7 @@ def run_multi_agent_workflow(
 ) -> MultiAgentWorkflowResult:
     with get_tracer().start_as_current_span(
         "commerce_pilot.workflow.multi_agent",
-        attributes={
-            "commerce_pilot.workflow.version": WORKFLOW_VERSION,
-            "commerce_pilot.workflow.category": request.category,
-            "commerce_pilot.workflow.region": request.region,
-            "commerce_pilot.workflow.max_products": request.max_products,
-            "commerce_pilot.workflow.write_enabled": write_enabled,
-        },
+        attributes=_workflow_span_attributes(request, write_enabled),
     ) as span:
         try:
             result = _run_multi_agent_workflow(
@@ -551,25 +760,5 @@ def run_multi_agent_workflow(
             span.record_exception(exc)
             span.set_status(Status(StatusCode.ERROR, type(exc).__name__))
             raise
-        span.set_attribute("commerce_pilot.task_id", result.task_id)
-        span.set_attribute("commerce_pilot.workflow.status", result.status)
-        span.set_attribute(
-            "commerce_pilot.workflow.selected_products", len(result.selected_products)
-        )
-        span.set_attribute(
-            "commerce_pilot.workflow.input_tokens",
-            sum(call.input_tokens for call in result.model_calls),
-        )
-        span.set_attribute(
-            "commerce_pilot.workflow.output_tokens",
-            sum(call.output_tokens for call in result.model_calls),
-        )
-        span.set_attribute(
-            "commerce_pilot.workflow.fallback_count",
-            sum(call.fallback_used for call in result.model_calls),
-        )
-        span.set_attribute(
-            "commerce_pilot.workflow.retry_count",
-            sum(call.attempts - 1 for call in result.model_calls),
-        )
+        _annotate_workflow_span(span, result)
         return result

@@ -131,6 +131,6 @@ FastAPI 自动埋点生成 HTTP SERVER/ASGI spans，业务层手工生成 `comme
 
 GitHub Actions 使用 Python 3.11 和 pgvector PostgreSQL service，依次执行 Ruff、mypy、85% 覆盖率门禁、`pip check`、Alembic 全量升级和 `alembic check`。CI 环境强制 deterministic Provider，不配置 DashScope Key，因此 Pull Request 不产生外部模型调用。
 
-同一 `quality/test` Job 使用 Node 24 执行 `npm ci`、Vitest、TypeScript 检查和 Vite 生产构建。React 工作流图和指标只消费后端真实返回；首版不伪造节点实时进度，后续如需逐节点更新，应由 LangGraph stream 通过 SSE 输出事件。
+同一 `quality/test` Job 使用 Node 24 执行 `npm ci`、Vitest、TypeScript 检查和 Vite 生产构建。React 通过带 Bearer JWT 的流式 `fetch` 调用 `POST /api/v1/workflows/multi-agent/stream`。FastAPI 将 LangGraph `tasks/values` 模式映射为 SSE 事件；节点开始、完成、失败与最终结构化结果都来自真实图执行。同步接口仍保留，流接口设置 `no-cache` 和 `X-Accel-Buffering: no` 防止代理缓冲，且不会在 URL、日志或浏览器历史中暴露 Token。
 
-Playwright 使用独立端口和隔离数据库执行真实 Chromium 测试。测试启动 development-only FastAPI 会话，但强制使用 deterministic LLM/RAG Provider，依次覆盖多 Agent 执行、混合检索证据、人工审批中断恢复与 DRAFT 活动写入。CI 失败时保存截图、视频、Trace 和 HTML 报告，既不调用付费模型，也不污染开发数据库。
+Playwright 使用独立端口和隔离数据库执行真实 Chromium 测试。测试启动 development-only FastAPI 会话，但强制使用 deterministic LLM/RAG Provider，依次覆盖 SSE 连接与节点完成状态、多 Agent 执行、混合检索证据、人工审批中断恢复与 DRAFT 活动写入。CI 失败时保存截图、视频、Trace 和 HTML 报告，既不调用付费模型，也不污染开发数据库。

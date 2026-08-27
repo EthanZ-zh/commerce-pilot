@@ -5,7 +5,12 @@ import { commerceApi } from "./api";
 import { Icon } from "./components/Icon";
 import { ScenarioPanel } from "./components/ScenarioPanel";
 import { formatDuration, summarizeRun } from "./lib";
-import type { ApprovalStartResult, ScenarioInput, WorkflowResult } from "./types";
+import type {
+  ApprovalStartResult,
+  ScenarioInput,
+  WorkflowProgressEvent,
+  WorkflowResult,
+} from "./types";
 
 const ResultPanel = lazy(() =>
   import("./components/ResultPanel").then((module) => ({ default: module.ResultPanel })),
@@ -43,6 +48,7 @@ export default function App() {
   const [agentResult, setAgentResult] = useState<WorkflowResult>();
   const [baselineResult, setBaselineResult] = useState<WorkflowResult>();
   const [approvalResult, setApprovalResult] = useState<ApprovalStartResult>();
+  const [agentProgress, setAgentProgress] = useState<WorkflowProgressEvent[]>([]);
 
   const health = useQuery({ queryKey: ["health"], queryFn: commerceApi.health, retry: 1 });
   const stats = useQuery({ queryKey: ["stats"], queryFn: commerceApi.stats, retry: 1 });
@@ -58,7 +64,22 @@ export default function App() {
   });
 
   const runAgent = useMutation({
-    mutationFn: () => commerceApi.runMultiAgent(scenario, analystSession.data?.access_token ?? ""),
+    mutationFn: () =>
+      commerceApi.streamMultiAgent(
+        scenario,
+        analystSession.data?.access_token ?? "",
+        (event) => {
+          setAgentProgress((current) => [
+            ...current.filter((item) => item.sequence !== event.sequence),
+            event,
+          ].sort((left, right) => left.sequence - right.sequence));
+        },
+      ),
+    onMutate: () => {
+      setAgentResult(undefined);
+      setAgentProgress([]);
+      setViewMode("agent");
+    },
     onSuccess: (result) => {
       setAgentResult(result);
       setViewMode("agent");
@@ -199,7 +220,11 @@ export default function App() {
                 />
               ) : null}
               <Suspense fallback={<div className="loading-panel"><Spin size="large" /></div>}>
-                <ResultPanel result={activeResult} label={viewMode === "agent" ? "MULTI-AGENT" : "BASELINE"} />
+                <ResultPanel
+                  result={activeResult}
+                  label={viewMode === "agent" ? "MULTI-AGENT" : "BASELINE"}
+                  progress={viewMode === "agent" ? agentProgress : []}
+                />
               </Suspense>
             </section>
           </div>
