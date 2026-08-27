@@ -6,10 +6,29 @@ test("runs an agent, shows RAG evidence, and approves the generated plan", async
   await expect(page.getByText("Backend online")).toBeVisible();
   await expect(page.getByTestId("run-agent")).toBeEnabled();
 
+  const streamResponse = page.waitForResponse((response) =>
+    response.url().endsWith("/api/v1/workflows/multi-agent/stream"),
+  );
   await page.getByTestId("run-agent").click();
+  const response = await streamResponse;
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-type"]).toContain("text/event-stream");
+  await expect(page.getByTestId("live-agent-progress")).toBeVisible();
   const result = page.getByTestId("workflow-result");
   await expect(result).toBeVisible({ timeout: 60_000 });
   await expect(result.getByText("合规通过")).toBeVisible();
+  await expect(page.getByTestId("agent-node-supervisor")).toHaveAttribute(
+    "data-status",
+    "completed",
+  );
+  await expect(page.getByTestId("agent-node-policy_rag")).toHaveAttribute(
+    "data-status",
+    "completed",
+  );
+  await expect(page.getByTestId("agent-node-execution_service")).toHaveAttribute(
+    "data-status",
+    "completed",
+  );
 
   // React Flow verifies attribution visibility one second after mounting.
   await expect(result.locator(".react-flow__attribution")).toBeVisible();

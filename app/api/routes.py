@@ -1,6 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from langgraph.checkpoint.postgres import PostgresSaver
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
@@ -31,7 +32,7 @@ from app.workflows.approval import (
     start_approval_workflow,
 )
 from app.workflows.baseline import run_baseline_workflow
-from app.workflows.multi_agent import run_multi_agent_workflow
+from app.workflows.multi_agent import run_multi_agent_workflow, stream_multi_agent_workflow
 
 router = APIRouter(prefix="/api/v1")
 DatabaseSession = Annotated[Session, Depends(get_db)]
@@ -90,6 +91,27 @@ def multi_agent_workflow(
     _principal: AnalystPrincipal,
 ) -> MultiAgentWorkflowResult:
     return run_multi_agent_workflow(db, request)
+
+
+@router.post("/workflows/multi-agent/stream", response_class=StreamingResponse)
+def stream_multi_agent(
+    request: BaselineWorkflowRequest,
+    db: DatabaseSession,
+    _principal: AnalystPrincipal,
+) -> StreamingResponse:
+    def event_stream():
+        for event in stream_multi_agent_workflow(db, request):
+            yield f"event: {event.event}\ndata: {event.model_dump_json()}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post(

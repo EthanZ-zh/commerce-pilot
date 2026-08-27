@@ -97,6 +97,8 @@ def test_workflow_api_enforces_authentication_and_roles(
         with TestClient(app) as client:
             missing = client.post("/api/v1/workflows/baseline", json={})
             assert missing.status_code == 401
+            missing_stream = client.post("/api/v1/workflows/multi-agent/stream", json={})
+            assert missing_stream.status_code == 401
 
             forbidden = client.post(
                 "/api/v1/workflows/baseline",

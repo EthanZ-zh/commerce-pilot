@@ -39,6 +39,7 @@ CommercePilot 是一个面向电商运营的多 Agent 协作平台。仓库已�
 - PostgreSQL + Redis Docker Compose；
 - GitHub Actions 覆盖率门禁、静态检查、依赖检查与真实 PostgreSQL 迁移检查；
 - React + TypeScript Agent 运营控制台：工作流图、RAG 证据、模型指标、基线对比与人工审批；
+- LangGraph `tasks/values` 流通过受 JWT 保护的 SSE 接口实时驱动节点运行、完成和失败状态；
 - Docker Compose `demo` profile 一键启动 API、前端、PostgreSQL 和 Redis；
 - pytest 单元与集成测试。
 
@@ -68,7 +69,7 @@ docker compose --profile demo up -d --build
 - React 演示台：http://127.0.0.1:5173
 - Swagger：http://127.0.0.1:8000/docs
 
-演示台会在后端 `development` 环境中自动创建 analyst/approver 临时会话，JWT 和 `thread_id` 只在页面内部流转。生产环境不会开放演示会话接口。停止服务但保留数据库卷：
+演示台会在后端 `development` 环境中自动创建 analyst/approver 临时会话，JWT 和 `thread_id` 只在页面内部流转。点击“运行多 Agent”后，页面通过 SSE 实时展示 7 个 LangGraph 节点的等待、运行、完成或失败状态。生产环境不会开放演示会话接口。停止服务但保留数据库卷：
 
 ```powershell
 docker compose --profile demo stop
@@ -230,6 +231,8 @@ Invoke-RestMethod `
 ```
 
 图中的 `business_analyst`、`inventory_pricing`、`policy_rag` 从 Qwen Supervisor 同时扇出，全部完成后才进入 Qwen Strategy Planner。`policy_rag` 使用混合检索；图拓扑、商品筛选、折扣、毛利、合规和审批仍由代码与确定性工具控制。模型输出通过 JSON Schema、Pydantic 业务语义和独立 Compliance Reviewer 三层校验，失败时记录成本并降级到规则计划。无模型密钥时系统可完整运行本地确定性路径。
+
+React 控制台调用 `POST /api/v1/workflows/multi-agent/stream`，以 `text/event-stream` 接收 `workflow_started`、`node_started`、`node_completed`、`node_failed`、`workflow_completed` 和 `workflow_failed`。它使用流式 `fetch` 携带 Bearer JWT，不把 Token 放入 URL；原同步接口继续保留给脚本和普通 API 调用。
 
 基线 API 使用相同的 `$body`：
 

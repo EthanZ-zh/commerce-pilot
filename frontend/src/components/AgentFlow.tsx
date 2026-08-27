@@ -9,7 +9,7 @@ import {
   type Node,
 } from "@xyflow/react";
 
-import type { TraceEvent } from "../types";
+import type { TraceEvent, WorkflowProgressEvent } from "../types";
 
 const flowNodes: Array<{
   id: string;
@@ -76,40 +76,72 @@ const flowEdges: Edge[] = [
 
 interface AgentFlowProps {
   trace: TraceEvent[];
+  progress?: WorkflowProgressEvent[];
 }
 
-export function AgentFlow({ trace }: AgentFlowProps) {
+export function AgentFlow({ trace, progress = [] }: AgentFlowProps) {
   const nodes = useMemo<Node[]>(
     () =>
       flowNodes.map((node) => {
         const event = trace.find((item) => item.node === node.id);
-        const completed = Boolean(event);
+        const liveEvent = [...progress].reverse().find((item) => item.node === node.id);
+        const state = liveEvent?.status ?? (event ? "COMPLETED" : "WAITING");
+        const completed = state === "COMPLETED";
+        const running = state === "RUNNING";
+        const failed = state === "FAILED";
+        const latency = liveEvent?.latency_ms ?? event?.latency_ms;
         return {
           id: node.id,
           position: node.position,
           data: {
             label: (
-              <div className="flow-node-content">
+              <div
+                className="flow-node-content"
+                data-testid={`agent-node-${node.id}`}
+                data-status={state.toLowerCase()}
+              >
                 <strong>{node.label}</strong>
                 <span>{node.subtitle}</span>
-                <small>{completed ? `${event?.latency_ms ?? 0} ms` : "等待运行"}</small>
+                <small>
+                  {failed
+                    ? "执行失败"
+                    : running
+                      ? "运行中…"
+                      : completed
+                        ? `${latency ?? 0} ms · 已完成`
+                        : "等待运行"}
+                </small>
               </div>
             ),
           },
           style: {
             width: 200,
             borderRadius: 16,
-            border: completed ? "1px solid #57d9a3" : "1px solid #34405f",
+            border: failed
+              ? "1px solid #ff7875"
+              : running
+                ? "1px solid #7180ff"
+                : completed
+                  ? "1px solid #57d9a3"
+                  : "1px solid #34405f",
             color: "#eef2ff",
-            background: completed
-              ? "linear-gradient(145deg, rgba(38, 116, 91, .96), rgba(22, 42, 57, .98))"
-              : "linear-gradient(145deg, #182238, #11192b)",
-            boxShadow: completed ? "0 12px 32px rgba(44, 190, 137, .18)" : "none",
+            background: failed
+              ? "linear-gradient(145deg, rgba(120, 45, 55, .96), rgba(42, 22, 33, .98))"
+              : running
+                ? "linear-gradient(145deg, rgba(53, 66, 145, .98), rgba(24, 34, 68, .98))"
+                : completed
+                  ? "linear-gradient(145deg, rgba(38, 116, 91, .96), rgba(22, 42, 57, .98))"
+                  : "linear-gradient(145deg, #182238, #11192b)",
+            boxShadow: running
+              ? "0 0 0 4px rgba(113, 128, 255, .12), 0 12px 32px rgba(80, 94, 210, .24)"
+              : completed
+                ? "0 12px 32px rgba(44, 190, 137, .18)"
+                : "none",
             padding: 2,
           },
         };
       }),
-    [trace],
+    [progress, trace],
   );
 
   return (
