@@ -142,9 +142,16 @@ export function ResultPanel({ result, label, progress = [] }: ResultPanelProps) 
             {result.execution_mode ?? "deterministic_baseline"}
           </Typography.Text>
         </div>
-        <Tag color={result.compliance.passed ? "success" : "error"}>
-          {result.compliance.passed ? "合规通过" : "策略被拦截"}
-        </Tag>
+        <div className="result-status-tags">
+          {progress.length ? (
+            <Tag color="processing" data-testid="sse-event-summary">
+              SSE · {progress.length} 个实时事件
+            </Tag>
+          ) : null}
+          <Tag color={result.compliance.passed ? "success" : "error"}>
+            {result.compliance.passed ? "合规通过" : "策略被拦截"}
+          </Tag>
+        </div>
       </Card>
 
       <div className="metric-strip">

@@ -100,6 +100,7 @@ main { width: min(1540px, 94vw); margin: 0 auto; padding: 44px 0 72px; }
 .result-stack { display: flex; flex-direction: column; gap: 14px; }
 .result-header .ant-card-body { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .result-header h3 { margin: 5px 0 2px !important; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 18px; }
+.result-status-tags { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .live-progress-header { border-color: rgba(113, 128, 255, .34) !important; }
 .live-progress-flow { padding-top: 18px; }
 .flow-node-content[data-status="running"] small { color: #aeb8ff; }

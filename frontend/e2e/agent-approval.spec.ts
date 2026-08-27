@@ -13,10 +13,10 @@ test("runs an agent, shows RAG evidence, and approves the generated plan", async
   const response = await streamResponse;
   expect(response.status()).toBe(200);
   expect(response.headers()["content-type"]).toContain("text/event-stream");
-  await expect(page.getByTestId("live-agent-progress")).toBeVisible();
   const result = page.getByTestId("workflow-result");
   await expect(result).toBeVisible({ timeout: 60_000 });
   await expect(result.getByText("合规通过")).toBeVisible();
+  await expect(page.getByTestId("sse-event-summary")).toContainText("个实时事件");
   await expect(page.getByTestId("agent-node-supervisor")).toHaveAttribute(
     "data-status",
     "completed",
