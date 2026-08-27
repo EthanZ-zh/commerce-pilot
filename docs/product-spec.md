@@ -155,4 +155,6 @@ CommercePilot 面向电商运营人员，将“发现库存积压商品—分析
 - 演示会话接口只能在 development 环境使用，生产环境必须不可用；
 - Docker Compose demo profile 可以启动 API、前端、PostgreSQL 与 Redis；
 - 前端 Vitest、TypeScript 检查和 Vite 生产构建纳入 GitHub Actions；
+- Playwright 在真实 Chromium 中完成“运行 Agent、查看 RAG 证据、提交审批、批准并生成 DRAFT”的端到端验证；
+- E2E 使用独立数据库与端口，测试数据和活动草稿不得污染开发环境；
 - 未接入 SSE 前不展示伪造的实时节点进度，只展示后端真实返回的轨迹。

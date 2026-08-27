@@ -94,6 +94,7 @@ export function ApprovalCenter({ token, latest }: ApprovalCenterProps) {
 
       {latest ? (
         <Alert
+          data-testid="approval-start-result"
           type="success"
           showIcon
           title={`任务 ${latest.task_id} 已进入 ${latest.status}`}
@@ -103,6 +104,7 @@ export function ApprovalCenter({ token, latest }: ApprovalCenterProps) {
 
       {decisionResult ? (
         <Alert
+          data-testid="approval-decision-result"
           type={decisionResult.decision === "APPROVED" ? "success" : "warning"}
           showIcon
           title={`审批结果：${decisionResult.status}`}
@@ -136,6 +138,9 @@ export function ApprovalCenter({ token, latest }: ApprovalCenterProps) {
           pagination={false}
           locale={{ emptyText: <Empty description="当前没有待审批任务" /> }}
           scroll={{ x: 780 }}
+          onRow={(row) => ({
+            className: row.thread_id === latest?.thread_id ? "latest-approval-row" : undefined,
+          })}
         />
       </Card>
 

@@ -34,6 +34,7 @@ jobs:
     env:
       APP_ENV: test
       DATABASE_URL: postgresql+psycopg://commerce:commerce@localhost:5432/commerce_pilot
+      E2E_DATABASE_URL: postgresql+psycopg://commerce:commerce@localhost:5432/commerce_pilot
       RAG_PROVIDER: deterministic
       LLM_PROVIDER: deterministic
       JWT_SECRET_KEY: ci-only-secret-key-at-least-thirty-two-bytes
@@ -77,6 +78,29 @@ jobs:
 
       - name: Test with coverage gate
         run: python -m pytest --cov=app --cov-report=term --cov-fail-under=85
+
+      - name: Prepare end-to-end database
+        run: |
+          python -m alembic upgrade head
+          python -m app.scripts.seed --products 120 --days 90
+
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end agent approval flow
+        working-directory: frontend
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 7
 
       - name: Check dependencies
         run: python -m pip check

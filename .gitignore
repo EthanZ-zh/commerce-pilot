@@ -15,5 +15,8 @@ dist/
 build/
 node_modules/
 *.tsbuildinfo
+playwright-report/
+test-results/
+blob-report/
 .demo/
 .demo-*.png

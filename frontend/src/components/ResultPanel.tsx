@@ -107,7 +107,7 @@ export function ResultPanel({ result, label }: ResultPanelProps) {
   }));
 
   return (
-    <div className="result-stack">
+    <div className="result-stack" data-testid="workflow-result">
       <Card className="result-header" variant="borderless">
         <div>
           <Typography.Text className="eyebrow">RUN RESULT · {label}</Typography.Text>
@@ -164,7 +164,7 @@ export function ResultPanel({ result, label }: ResultPanelProps) {
                     scroll={{ x: 680 }}
                   />
                 </Card>
-                <div className="policy-grid">
+                <div className="policy-grid" data-testid="policy-evidence">
                   {result.policies.map((policy) => <PolicyCard key={policy.policy_id} policy={policy} />)}
                 </div>
                 <Collapse

@@ -89,6 +89,22 @@ npm ci --prefix frontend
 npm run dev --prefix frontend
 ```
 
+运行真实浏览器端到端测试前，先启动 PostgreSQL，并确保数据库已迁移和播种：
+
+~~~powershell
+docker compose up -d postgres
+$env:DATABASE_URL = "postgresql+psycopg://commerce:commerce@127.0.0.1:5432/commerce_pilot_e2e"
+$env:E2E_DATABASE_URL = $env:DATABASE_URL
+docker compose exec postgres createdb -U commerce commerce_pilot_e2e
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m app.scripts.seed
+npm exec --prefix frontend playwright install chromium
+$env:E2E_PYTHON = ".\.venv\Scripts\python.exe"
+npm run test:e2e --prefix frontend
+~~~
+
+首次创建数据库后，若 `createdb` 提示数据库已经存在，可以继续后续命令。Playwright 默认使用独立的 `commerce_pilot_e2e`，自动启动 FastAPI 与 Vite，并以 deterministic Provider 验证“运行多 Agent、查看 RAG 证据、提交审批、批准并生成 DRAFT 活动”的完整页面闭环。失败时报告保存在 `frontend/playwright-report/`，CI 会上传对应产物。
+
 ### 1. 创建环境
 
 ```powershell
