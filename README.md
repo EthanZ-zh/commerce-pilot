@@ -1,6 +1,43 @@
 # CommercePilot
 
-CommercePilot 是一个面向电商运营的多 Agent 协作平台。仓库已完成确定性基线、LangGraph Supervisor-Worker 和可恢复人工审批：三个并行 Worker 完成销量分析、库存定价和政策检索，策略与合规节点汇总后暂停执行，只有人工整批批准才能创建活动草稿。
+[![quality](https://github.com/EthanZ-zh/commerce-pilot/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/EthanZ-zh/commerce-pilot/actions/workflows/ci.yml)
+
+CommercePilot 是一个面向电商运营的**可解释多 Agent 决策与人工审批平台**。系统使用 LangGraph 编排销量分析、库存定价和政策 RAG 三个并行 Worker，策略经过确定性合规护栏与人工批准后才允许生成活动草稿；React 控制台通过受 JWT 保护的 SSE 展示真实节点进度、证据和模型成本。
+
+它不是一个只生成文案的聊天机器人，而是一套覆盖**真实业务数据、混合 RAG、Human-in-the-loop、幂等副作用、实时可观测性、评测和 CI**的完整 Agent 工程基线。无模型 Key 时可运行确定性路径；配置 DashScope 后可演示真实 Qwen Supervisor、Strategy、Embedding 与 Reranker。
+
+[快速体验](#快速开始) · [架构设计](docs/architecture.md) · [产品规格](docs/product-spec.md)
+
+## 项目概览
+
+| 维度 | 当前实现 |
+| --- | --- |
+| Agent 编排 | 7 节点 Supervisor-Worker；3 个证据 Worker 并行扇出与汇合 |
+| 混合 RAG | BM25 + pgvector HNSW + RRF + Qwen Rerank；保留来源、版本、Chunk 和分数 |
+| 安全写入 | JWT/RBAC、确定性合规、人工审批、行锁、状态机与幂等键；仅写 `DRAFT` |
+| 实时交互 | FastAPI SSE + React Flow 展示节点等待、运行、完成和失败状态 |
+| 质量验证 | 41 项后端测试、86.09% 覆盖率、4 项前端测试、Playwright Chromium 完整闭环 |
+| 工程门禁 | Ruff、mypy、Vitest、TypeScript、Vite、依赖检查、Alembic drift、GitHub 分支保护 |
+
+```mermaid
+flowchart LR
+    UI[React Console] -->|JWT + POST| API[FastAPI]
+    API --> S[Supervisor]
+    S --> A[Sales Worker]
+    S --> B[Inventory Pricing]
+    S --> C[Policy RAG]
+    A --> P[Strategy Planner]
+    B --> P
+    C --> P
+    P --> R[Compliance Reviewer]
+    R --> H[Human Approval]
+    H --> E[Execution Service: DRAFT only]
+    S -. SSE progress .-> UI
+    C --> V[(BM25 + pgvector + Rerank)]
+    H --> K[(PostgreSQL Checkpoint)]
+```
+
+![CommercePilot React Agent 运营控制台](docs/assets/commerce-pilot-console.png)
 
 ## 为什么先做确定性基线
 
@@ -11,37 +48,30 @@ CommercePilot 是一个面向电商运营的多 Agent 协作平台。仓库已�
 
 ## 已实现
 
-- PostgreSQL 业务模型：商品、日销售、库存、评价、政策、活动、审批、运行轨迹；
-- 固定随机种子的演示数据：默认 500 个商品、90 天销量（45,000 条）；
-- 六个确定性工具：销量、库存、折扣模拟、政策检索、合规检查、活动草稿；
-- 政策分块、pgvector HNSW 索引与可追溯的检索分数；
-- 8 条版本化政策目录与非破坏、幂等的同步命令；
-- BM25 + 向量 Top-K + RRF 融合 + Reranker 的混合 RAG；
-- 24 条检索评测集及 Recall@K、MRR、nDCG 离线评测；
-- 6 类 Agent 端到端/对抗场景及任务成功率、约束违规率、重试、fallback、Token、延迟评测；
-- 百炼 `text-embedding-v4` / `qwen3-rerank` 与无 Key 确定性降级；
-- 百炼 `qwen3.7-flash` Supervisor 与 `qwen3.7-plus` Strategy Planner 分流；
-- 严格 JSON Schema、Pydantic 语义护栏和确定性模型降级；
-- LLM Token、延迟、模型、attempts、fallback 和错误轨迹；
-- OpenTelemetry FastAPI、Workflow、LLM、RAG spans 与 OTLP/Console exporter；
-- 活动草稿幂等、强制 `DRAFT`、人工审批约束；
-- 无 LLM 基线 Workflow；
-- LangGraph Supervisor + 三个并行 Worker；
-- 独立策略汇总、合规复核和草稿执行节点；
-- 基线与多 Agent 使用不同任务指纹，可做效果、延迟和轨迹对比；
-- PostgreSQL Checkpointer 持久化 LangGraph 状态，支持服务重启后恢复；
-- 整批人工批准/拒绝、待审批列表和任务状态 API；
-- Bearer JWT 身份认证、角色授权与不可伪造的审批人身份；
-- 审批操作人、决定、理由和 Agent 轨迹持久化；
-- 数据库行锁、任务状态机和活动幂等共同防止重复审批与重复写入；
-- FastAPI 健康检查、数据统计和 Workflow API；
-- Alembic 业务模型、审批与 pgvector 三阶段迁移；
-- PostgreSQL + Redis Docker Compose；
-- GitHub Actions 覆盖率门禁、静态检查、依赖检查与真实 PostgreSQL 迁移检查；
-- React + TypeScript Agent 运营控制台：工作流图、RAG 证据、模型指标、基线对比与人工审批；
-- LangGraph `tasks/values` 流通过受 JWT 保护的 SSE 接口实时驱动节点运行、完成和失败状态；
-- Docker Compose `demo` profile 一键启动 API、前端、PostgreSQL 和 Redis；
-- pytest 单元与集成测试。
+### Agent 与 RAG
+
+- 无 LLM 的确定性基线，以及 Qwen Supervisor / Strategy Planner 分层模型路由；
+- 销量、库存定价、政策 RAG 三个 Worker 使用独立数据库 Session 并行执行；
+- 六个受控业务工具，价格和毛利由 SQL 与 Decimal 公式计算，不交给 LLM 猜测；
+- BM25 与 pgvector HNSW 双路召回、RRF 融合和 Rerank 精排；
+- 严格 JSON Schema、Pydantic 语义校验、有限重试和可审计的确定性 fallback；
+- 24 条 RAG 评测集和 6 类 Agent 正常/边界/对抗场景，执行评测时禁止业务写入。
+
+### 审批与安全
+
+- PostgreSQL Checkpointer 支持工作流中断、服务重启和审批恢复；
+- Bearer JWT、analyst/approver/viewer/admin RBAC 与不可由请求体伪造的审批人身份；
+- 独立业务任务/审批表，避免 API 依赖 LangGraph 内部 checkpoint schema；
+- 合规护栏、人工整批批准/拒绝、行锁、状态机、唯一约束和活动幂等键；
+- Execution Service 强制只创建 `DRAFT`，项目不提供自动发布接口。
+
+### 前端、可观测性与工程化
+
+- React + TypeScript 控制台展示 Agent 图、混合 RAG 证据、模型 Token/延迟、基线对比和审批中心；
+- LangGraph `tasks/values` 通过带 JWT 的 SSE 实时驱动节点状态，并保留事件摘要；
+- OpenTelemetry 关联 FastAPI、Workflow、LLM 与 RAG spans，不记录完整 Prompt、文案或 Key；
+- Docker Compose `demo` profile 运行 API、前端、PostgreSQL 和 Redis；
+- GitHub Actions 执行前后端静态检查、85% 覆盖率门禁、真实 pgvector 迁移、Playwright 和依赖检查。
 
 ## 技术栈
 
@@ -50,19 +80,27 @@ CommercePilot 是一个面向电商运营的多 Agent 协作平台。仓库已�
 - SQLAlchemy 2 / Alembic
 - PostgreSQL / Redis
 - pytest / Ruff / mypy
-- Docker Compose
+- Playwright / GitHub Actions
+- Docker Compose / OpenTelemetry
 - React / TypeScript / Vite / Ant Design / React Flow
-- 下一阶段：OIDC/JWKS、遥测看板与人工标注对抗评测
 
 ## 快速开始
 
-### 0. 一键打开面试演示台
+### 0. 打开面试演示台
 
 确保 Docker Desktop 已启动，然后执行：
 
 ```powershell
 docker compose --profile demo up -d --build
 ```
+
+全新克隆或使用空数据库卷时，再执行一次演示数据初始化：
+
+```powershell
+docker compose exec api python -m app.scripts.seed
+```
+
+`seed` 会重置演示业务表。已经产生审批或活动数据后不要重复执行；日常重启只需要第一条 `docker compose` 命令。
 
 打开：
 
@@ -286,14 +324,20 @@ Invoke-RestMethod `
 ## 验证
 
 ```powershell
-./.venv/Scripts/python.exe -m pytest
-./.venv/Scripts/python.exe -m ruff check .
+./.venv/Scripts/python.exe -m ruff check app tests
 ./.venv/Scripts/python.exe -m mypy app tests
+./.venv/Scripts/python.exe -m pytest --cov=app --cov-report=term --cov-fail-under=85
+./.venv/Scripts/python.exe -m pip check
+npm test --prefix frontend
+npm run typecheck --prefix frontend
+npm run build --prefix frontend
+./.venv/Scripts/python.exe -m alembic check
+docker compose --profile demo config --quiet
 ```
 
-测试默认使用 SQLite 内存数据库，不依赖 Docker。
+普通 pytest 默认使用 SQLite 内存数据库。Playwright 使用独立 PostgreSQL 数据库与端口，准备方式见上方快速开始；当前验收结果为 41 项后端测试、86.09% 覆盖率和 4 项前端测试通过。
 
-GitHub Actions 在 Python 3.11 上执行相同检查，并启动 `pgvector/pgvector:pg16` service 完成全部 Alembic 升级和 schema drift 检查；CI 强制使用确定性 LLM/RAG Provider，不读取开发机密钥或产生付费调用。
+GitHub Actions 在 Python 3.11、Node.js 24 和 `pgvector/pgvector:pg16` service 上执行相同门禁，并在真实 Chromium 中验证“运行 Agent → 接收 SSE → 查看 RAG 证据 → 提交审批 → 批准并生成 DRAFT”的完整页面流程。CI 强制使用确定性 LLM/RAG Provider，不读取开发机密钥或产生付费调用；失败时上传 Playwright 截图、视频、Trace 和 HTML 报告。
 
 ## OpenTelemetry
 
@@ -333,27 +377,35 @@ Trace 包含 HTTP 请求、工作流状态、task ID、入选商品数、LLM 模
 ## 目录
 
 ```text
-app/
-├── api/              # FastAPI 路由
-├── domain/           # SQLAlchemy 业务模型
-├── evaluation/       # RAG 数据集与评测指标
-├── infrastructure/   # 数据库适配
-├── policies/         # 版本化政策目录与同步
-├── schemas/          # Pydantic 工具契约
-├── scripts/          # 初始化、种子数据和演示脚本
-├── tools/            # 六个确定性业务工具
-└── workflows/        # 确定性基线与 LangGraph 多 Agent 工作流
-docs/                 # 产品规格和架构设计
-migrations/           # Alembic 迁移
-tests/                # 单元与集成测试
+.
+├── .github/workflows/  # required quality/test CI
+├── app/
+│   ├── api/            # FastAPI 路由与 SSE
+│   ├── domain/         # SQLAlchemy 业务模型
+│   ├── evaluation/     # RAG 与 Agent 评测
+│   ├── infrastructure/ # 数据库与 Checkpointer
+│   ├── llm/            # Qwen 与确定性 Provider
+│   ├── policies/       # 版本化政策目录
+│   ├── rag/            # 索引、双路召回、融合与重排
+│   ├── scripts/        # 初始化、评测和演示命令
+│   ├── tools/          # 六个确定性业务工具
+│   └── workflows/      # 基线、多 Agent 与审批图
+├── frontend/
+│   ├── e2e/            # Playwright 真实浏览器闭环
+│   └── src/            # React Agent Operations Console
+├── docs/               # 产品规格、架构与演示截图
+├── migrations/         # Alembic 业务迁移
+├── tests/              # Python 单元与集成测试
+├── docker-compose.yml  # PostgreSQL、Redis、API、前端
+└── pyproject.toml
 ```
 
 ## 后续路线
 
 1. 将合成 RAG smoke 集扩充为人工标注的真实问法、难负例和多相关文档；
-2. 扩充 Agent 对抗场景并增加可配置模型单价的成本估算与多次运行置信区间；
-3. 将本地 HS256 JWT 替换为企业 OIDC/JWKS，并增加 Token 撤销和租户权限；
-4. 为 OTLP Trace 增加 Grafana/Jaeger/Langfuse 看板、告警和脱敏策略；
-5. 对比确定性基线、LLM 多 Agent 和人工审批版本的效果、延迟和成本。
+2. 将本地 HS256 JWT 替换为企业 OIDC/JWKS，并增加 Token 撤销、租户权限与限流；
+3. 为 OTLP Trace 增加 Grafana/Jaeger/Langfuse 看板、告警和脱敏策略；
+4. 部署公开演示环境，并接入云端密钥托管、健康告警和备份恢复；
+5. 进一步拆分 Ant Design、React Flow 和 Recharts 大型前端 Chunk。
 
 更完整的边界和验收标准见 [产品规格](docs/product-spec.md) 与 [架构设计](docs/architecture.md)。
