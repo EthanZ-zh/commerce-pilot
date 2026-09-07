@@ -17,7 +17,7 @@ React Agent Console
               -> PostgreSQL（生产）/ SQLite（测试）
 ```
 
-React 层只调用 FastAPI，不读取数据库、不持有 DashScope Key，也不绕过 JWT/RBAC。开发环境通过 `/api/v1/auth/demo-session` 获取短期 analyst/approver 会话，消除面试演示中的手工 Token 和 `thread_id` 操作；该接口在非 `development` 环境返回 404。生产构建由 Nginx 提供静态文件，并将 `/api` 同源代理到 FastAPI。
+React 层只调用 FastAPI，不读取数据库、不持有 DashScope Key，也不绕过 JWT/RBAC。开发环境通过 `/api/v1/auth/demo-session` 获取短期 analyst/approver 会话，消除演示中的手工 Token 和 `thread_id` 操作；该接口在非 `development` 环境返回 404。生产构建由 Nginx 提供静态文件，并将 `/api` 同源代理到 FastAPI。
 
 第一阶段刻意不使用 LLM。第二阶段已将编排升级为 LangGraph Supervisor-Worker 图，并继续复用相同工具契约。
 
