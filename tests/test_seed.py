@@ -13,9 +13,9 @@ def test_seed_is_reproducible_and_has_expected_scale(db: Session) -> None:
         "sales_daily": 84,
         "inventory_snapshots": 12,
         "product_reviews": 12,
-        "policies": 8,
+        "policies": 10,
     }
     assert db.scalar(select(func.count()).select_from(Product)) == 12
     assert db.scalar(select(func.count()).select_from(SalesDaily)) == 84
     assert db.scalar(select(func.count()).select_from(InventorySnapshot)) == 12
-    assert db.scalar(select(func.count()).select_from(Policy)) == 8
+    assert db.scalar(select(func.count()).select_from(Policy)) == 10
