@@ -38,6 +38,11 @@ def sync_shop_data(
         platform_orders = gateway.list_orders(
             credentials, date_from=date_from.isoformat(), date_to=date_to.isoformat()
         )
+        if any(
+            order.created_at.date() < date_from or order.created_at.date() > date_to
+            for order in platform_orders
+        ):
+            raise ValueError("gateway order is outside requested date range")
         products_by_sku = {
             product.sku: product for product in db.scalars(select(Product)).all()
         }

@@ -209,6 +209,69 @@ def test_sync_maps_platform_data_and_preserves_internal_metrics(db: Session) -> 
     ) == (7, 11, 9)
 
 
+def test_taobao_finished_order_updates_sales_through_sync_service(db: Session) -> None:
+    from app.config import Settings
+    from app.platform.sync import sync_shop_data
+    from app.platform.taobao import TaobaoShopGateway
+
+    product = make_product()
+    db.add(product)
+    db.flush()
+    db.add(
+        InventorySnapshot(
+            date=date(2026, 8, 31),
+            product_id=product.id,
+            available_stock=3,
+            inbound_stock=11,
+            turnover_days=9,
+        )
+    )
+    db.commit()
+
+    def transport(_gateway_url: str, _params: dict[str, str]) -> dict[str, object]:
+        return {
+            "trades_sold_get_response": {
+                "has_next": False,
+                "trades": {
+                    "trade": [
+                        {
+                            "tid": "top-order-1",
+                            "sku_id": "SKU-1",
+                            "title": "Platform title",
+                            "num": "3",
+                            "payment": "45.00",
+                            "status": "TRADE_FINISHED",
+                            "created": "2026-09-01T10:00:00",
+                        }
+                    ]
+                },
+            }
+        }
+
+    gateway = TaobaoShopGateway(Settings(platform_provider="taobao"), transport=transport)
+    credentials = ShopCredentials(
+        tenant_id="shop-1",
+        platform="taobao",
+        app_key="app-key",
+        app_secret="app-secret",
+        session_key="session-key",
+    )
+
+    report = sync_shop_data(
+        db,
+        gateway,
+        credentials,
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 1),
+        snapshot_date=date(2026, 9, 1),
+    )
+
+    daily = db.scalar(select(SalesDaily).where(SalesDaily.product_id == product.id))
+    assert report.sales_rows_updated == 1
+    assert daily is not None
+    assert (daily.orders, daily.revenue) == (3, Decimal("45.00"))
+
+
 def test_multi_agent_reads_synchronized_shop_evidence(db: Session) -> None:
     from app.platform.sync import sync_shop_data
 
@@ -322,6 +385,44 @@ def test_sync_rejects_invalid_dates_before_calling_gateway(db: Session) -> None:
         )
     assert gateway.product_calls == 0
     assert gateway.order_calls == 0
+
+
+def test_sync_rejects_out_of_window_order_and_rolls_back_all_writes(db: Session) -> None:
+    from app.platform.sync import sync_shop_data
+
+    product = make_product()
+    db.add(product)
+    db.flush()
+    db.add(
+        InventorySnapshot(
+            date=date(2026, 8, 31),
+            product_id=product.id,
+            available_stock=3,
+            inbound_stock=11,
+            turnover_days=9,
+        )
+    )
+    db.commit()
+    gateway = synced_gateway()
+    gateway.orders[0] = replace(
+        gateway.orders[0], created_at=datetime(2026, 9, 2, 10)
+    )
+
+    with pytest.raises(ValueError, match="outside"):
+        sync_shop_data(
+            db,
+            gateway,
+            ShopCredentials(tenant_id="shop-1"),
+            date_from=date(2026, 9, 1),
+            date_to=date(2026, 9, 1),
+            snapshot_date=date(2026, 9, 1),
+        )
+
+    db.refresh(product)
+    assert product.title == "Internal title"
+    assert product.sale_price == Decimal("50.00")
+    assert db.scalar(select(func.count()).select_from(SalesDaily)) == 0
+    assert db.scalar(select(func.count()).select_from(InventorySnapshot)) == 1
 
 
 def test_sync_rolls_back_product_changes_when_gateway_fails(db: Session) -> None:

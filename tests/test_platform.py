@@ -203,6 +203,7 @@ def test_taobao_orders_paginate_and_map_sku_id() -> None:
     )
 
     assert [order.product_sku for order in orders] == ["SKU-1", "SKU-2"]
+    assert [order.status for order in orders] == ["FINISHED", "FINISHED"]
     assert [params["page_no"] for params in calls] == ["1", "2"]
     assert all("sku_id" in params["fields"] for params in calls)
     assert all(params["use_has_next"] == "true" for params in calls)
@@ -222,6 +223,29 @@ def test_taobao_orders_reject_missing_pagination_state() -> None:
     )
 
     with pytest.raises(ValueError, match="has_next"):
+        gateway.list_orders(credentials, date_from="2026-09-01", date_to="2026-09-02")
+
+
+@pytest.mark.parametrize("created", [None, "not-a-timestamp"])
+def test_taobao_orders_reject_missing_or_invalid_created_timestamp(created: object) -> None:
+    def transport(_gateway_url: str, _params: dict[str, str]) -> dict[str, object]:
+        return {
+            "trades_sold_get_response": {
+                "has_next": False,
+                "trades": {"trade": [{"tid": "order-1", "sku_id": "SKU-1", "created": created}]},
+            }
+        }
+
+    gateway = TaobaoShopGateway(Settings(platform_provider="taobao"), transport=transport)
+    credentials = ShopCredentials(
+        tenant_id="t1",
+        platform="taobao",
+        app_key="app-key",
+        app_secret="app-secret",
+        session_key="session-key",
+    )
+
+    with pytest.raises(ValueError, match="created"):
         gateway.list_orders(credentials, date_from="2026-09-01", date_to="2026-09-02")
 
 

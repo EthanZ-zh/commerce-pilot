@@ -224,16 +224,21 @@ def _to_platform_order(trade: object) -> PlatformOrder:
 
     mapping = trade if isinstance(trade, dict) else {}
     created = mapping.get("created")
+    if not created:
+        raise ValueError("TOP order is missing created timestamp")
     try:
-        created_at = datetime.fromisoformat(str(created)) if created else datetime.min
+        created_at = datetime.fromisoformat(str(created))
     except ValueError:
-        created_at = datetime.min
+        raise ValueError("TOP order has invalid created timestamp") from None
+    status = str(mapping.get("status") or "")
+    if status == "TRADE_FINISHED":
+        status = "FINISHED"
     return PlatformOrder(
         order_id=str(mapping.get("tid") or ""),
         product_sku=str(mapping.get("sku_id") or ""),
         title=str(mapping.get("title") or ""),
         quantity=int(mapping.get("num") or 0),
         paid_amount=Decimal(str(mapping.get("payment") or "0")),
-        status=str(mapping.get("status") or ""),
+        status=status,
         created_at=created_at,
     )
