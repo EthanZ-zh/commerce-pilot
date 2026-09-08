@@ -45,6 +45,9 @@ class FakeGateway:
             raise RuntimeError("gateway unavailable")
         return self.orders
 
+    def update_stock(self, credentials: ShopCredentials, sku: str, quantity: int) -> None:
+        return None
+
 
 def make_product() -> Product:
     return Product(
