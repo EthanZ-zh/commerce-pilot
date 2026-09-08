@@ -7,7 +7,7 @@ CommercePilot 是一个面向电商运营的多 Agent 协作平台。仓库已�
 - 业务数字来自 SQL 或公式，不交给 LLM 猜测；
 - 工具契约先稳定，后续 Agent 只负责规划和选择工具；
 - 可以对比单工作流和多 Agent 的任务完成率、延迟与 Token 成本；
-- 在接入外部模型前就能完成测试和演示。
+- 在接入外部模型前就能完成测试和运行。
 
 ## 已实现
 
@@ -56,7 +56,7 @@ CommercePilot 是一个面向电商运营的多 Agent 协作平台。仓库已�
 
 ## 快速开始
 
-### 0. 一键启动演示台
+### 0. 打开开发控制台
 
 确保 Docker Desktop 已启动，然后执行：
 
@@ -66,10 +66,10 @@ docker compose --profile demo up -d --build
 
 打开：
 
-- React 演示台：http://127.0.0.1:5173
+- React 控制台：http://127.0.0.1:5173
 - Swagger：http://127.0.0.1:8000/docs
 
-演示台会在后端 `development` 环境中自动创建 analyst/approver 临时会话，JWT 和 `thread_id` 只在页面内部流转。点击“运行多 Agent”后，页面通过 SSE 实时展示 7 个 LangGraph 节点的等待、运行、完成或失败状态。生产环境不会开放演示会话接口。停止服务但保留数据库卷：
+控制台会在后端 `development` 环境中自动创建 analyst/approver 临时会话，JWT 和 `thread_id` 只在页面内部流转。点击“运行多 Agent”后，页面通过 SSE 实时展示 7 个 LangGraph 节点的等待、运行、完成或失败状态。生产环境不会开放演示会话接口。停止服务但保留数据库卷：
 
 ```powershell
 docker compose --profile demo stop
@@ -122,7 +122,7 @@ docker compose up -d postgres redis
 docker compose ps
 ```
 
-### 3. 初始化数据库和演示数据
+### 3. 初始化数据库和开发数据
 
 ```powershell
 ./.venv/Scripts/python.exe -m alembic upgrade head
@@ -192,7 +192,7 @@ LLM_PROVIDER=dashscope
 - 健康检查：http://127.0.0.1:8000/api/v1/health
 - 数据统计：http://127.0.0.1:8000/api/v1/stats
 
-工作流接口需要 JWT。开发环境可签发演示 Token；生产环境应接入真实身份提供方，禁止使用该脚本：
+工作流接口需要 JWT。开发环境可签发开发 Token；生产环境应接入真实身份提供方，禁止使用该脚本：
 
 ```powershell
 $analystToken = ./.venv/Scripts/python.exe -m app.scripts.issue_dev_token `
@@ -340,7 +340,7 @@ app/
 ├── infrastructure/   # 数据库适配
 ├── policies/         # 版本化政策目录与同步
 ├── schemas/          # Pydantic 工具契约
-├── scripts/          # 初始化、种子数据和演示脚本
+├── scripts/          # 初始化、种子数据和运行命令
 ├── tools/            # 六个确定性业务工具
 └── workflows/        # 确定性基线与 LangGraph 多 Agent 工作流
 docs/                 # 产品规格和架构设计

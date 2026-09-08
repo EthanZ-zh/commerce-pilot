@@ -164,7 +164,7 @@ export default function App() {
             className="global-alert"
             type="error"
             showIcon
-            title="无法创建本地演示会话"
+            title="无法创建本地开发会话"
             description="确认 APP_ENV=development，FastAPI 已重启并包含 /api/v1/auth/demo-session。"
           />
         ) : null}

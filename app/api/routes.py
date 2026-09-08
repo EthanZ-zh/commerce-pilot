@@ -48,7 +48,7 @@ AppSettings = Annotated[Settings, Depends(get_settings)]
 @router.post("/auth/demo-session", response_model=DemoSessionResult)
 def create_demo_session(request: DemoSessionRequest, settings: AppSettings) -> DemoSessionResult:
     if settings.app_env != "development":
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="演示会话不可用")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="开发会话不可用")
     subject = "demo-analyst" if request.role == "analyst" else "demo-approver"
     token = create_access_token(subject, {request.role}, settings)
     return DemoSessionResult(

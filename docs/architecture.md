@@ -17,7 +17,7 @@ React Agent Console
               -> PostgreSQL（生产）/ SQLite（测试）
 ```
 
-React 层只调用 FastAPI，不读取数据库、不持有 DashScope Key，也不绕过 JWT/RBAC。开发环境通过 `/api/v1/auth/demo-session` 获取短期 analyst/approver 会话，消除演示中的手工 Token 和 `thread_id` 操作；该接口在非 `development` 环境返回 404。生产构建由 Nginx 提供静态文件，并将 `/api` 同源代理到 FastAPI。
+React 层只调用 FastAPI，不读取数据库、不持有 DashScope Key，也不绕过 JWT/RBAC。开发环境通过 `/api/v1/auth/demo-session` 获取短期 analyst/approver 会话，消除现场运行中的手工 Token 和 `thread_id` 操作；该接口在非 `development` 环境返回 404。生产构建由 Nginx 提供静态文件，并将 `/api` 同源代理到 FastAPI。
 
 第一阶段刻意不使用 LLM。第二阶段已将编排升级为 LangGraph Supervisor-Worker 图，并继续复用相同工具契约。
 
@@ -44,7 +44,7 @@ START
 RAG Provider 有两种模式：
 
 - `deterministic`：本地哈希向量与词法重排，不需要 Key，供 CI 和降级使用；
-- `dashscope`：百炼 `text-embedding-v4` 与 `qwen3-rerank`，用于真实模型演示。
+- `dashscope`：百炼 `text-embedding-v4` 与 `qwen3-rerank`，用于真实模型运行。
 
 政策语料由版本化目录维护，`sync_policy_catalog` 按政策 code 幂等新增或更新，不删除用户自定义政策，也不要求重置业务数据。评测层使用带相关政策 code 标注的查询集，统一计算 Recall@K、MRR 和 nDCG@K；pytest 使用确定性 Provider，真实百炼评测由显式脚本触发，防止 CI 产生费用。
 
@@ -121,7 +121,7 @@ API 使用 FastAPI `HTTPBearer` 读取 JWT，由 PyJWT 校验 HS256 签名、`ex
 | `viewer` | 只读审批任务详情 |
 | `admin` | 以上全部权限 |
 
-审批 HTTP Schema 只接受决定和理由，领域层需要的 `operator` 由已验证 Principal 的 `sub` 创建，调用方无法通过请求体冒充他人。本地开发脚本只负责生成演示 Token，并在 `APP_ENV=production` 时拒绝运行；生产部署应改为 OIDC/OAuth2 身份提供方和非对称签名/JWKS。
+审批 HTTP Schema 只接受决定和理由，领域层需要的 `operator` 由已验证 Principal 的 `sub` 创建，调用方无法通过请求体冒充他人。本地开发脚本只负责生成开发 Token，并在 `APP_ENV=production` 时拒绝运行；生产部署应改为 OIDC/OAuth2 身份提供方和非对称签名/JWKS。
 
 ## 7. OpenTelemetry 与 CI
 

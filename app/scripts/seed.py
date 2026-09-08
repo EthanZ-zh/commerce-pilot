@@ -138,7 +138,7 @@ def seed_database(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="初始化 CommercePilot 演示数据")
+    parser = argparse.ArgumentParser(description="初始化 CommercePilot 开发数据")
     parser.add_argument("--products", type=int, default=500)
     parser.add_argument("--days", type=int, default=90)
     parser.add_argument("--no-reset", action="store_true")
