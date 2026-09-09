@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     log_level: str = "INFO"
     rag_provider: str = "deterministic"
+    platform_provider: str = "mock"
+    taobao_gateway_url: str = "https://eco.taobao.com/router/rest"
+    taobao_app_key: str = ""
+    taobao_app_secret: str = ""
+    taobao_session_key: str = ""
     dashscope_api_key: str = ""
     dashscope_embedding_url: str = (
         "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings"
