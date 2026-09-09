@@ -30,6 +30,7 @@ CommercePilot 是一个面向电商运营的多 Agent 协作平台。仓库已�
 - 独立策略汇总、合规复核和草稿执行节点；
 - 基线与多 Agent 使用不同任务指纹，可做效果、延迟和轨迹对比；
 - PostgreSQL Checkpointer 持久化 LangGraph 状态，支持服务重启后恢复；
+- 平台无关 `ShopGateway`、本地 Mock 数据源与原子同步命令，Agent 统一读取同步后的规范业务表；
 - 整批人工批准/拒绝、待审批列表和任务状态 API；
 - Bearer JWT 身份认证、角色授权与不可伪造的审批人身份；
 - 审批操作人、决定、理由和 Agent 轨迹持久化；
@@ -282,6 +283,20 @@ Invoke-RestMethod `
 ```
 
 拒绝时将 `decision` 改为 `REJECTED` 并填写 `reason`。拒绝后任务直接结束且不会创建活动。Checkpointer 表在首次调用审批接口时自动初始化。
+
+## 平台接入与验证边界
+
+平台数据链路为：`ShopGateway → 同步命令 → PostgreSQL 规范模型 → Agent Worker`。业务工作流不直接依赖具体平台 API；同步过程只更新已存在的 SKU，保留成本、流量与库存规划字段，并对分页、状态、时间范围、幂等和事务回滚进行校验。
+
+默认使用本地合成数据的 Mock Gateway：
+
+```powershell
+./.venv/Scripts/python.exe -m app.scripts.sync_platform_data `
+  --date-from 2026-08-01 `
+  --date-to 2026-08-31
+```
+
+淘宝 TOP 部分仅实现离线签名、请求和响应映射，通过注入 Fake Transport 测试；仓库不包含真实 OAuth、店铺访问、库存写入或活动发布能力。当前验证结果为 71 项后端测试通过、覆盖率 87.33%，前端测试、类型检查、构建及 GitHub Actions 均通过。
 
 ## 验证
 
